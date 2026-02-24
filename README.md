@@ -79,25 +79,24 @@ To run the sampling and the evaluation of a trained model.
 ```
 python3 src/main.py --use_cuda --plot --model_dir path/to/model --epoch model_name
 ```
-## Incident Energy Splits
 
-For convenience, we provide predefined paths for different incident energy ranges used in our experiments. These splits allow evaluation of model performance across low, mid, and high energy regimes.
 
-### High Incident Energy
-Train Data Path:  
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_high.hdf5  
-Test Data Path:  
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_high.hdf5
+## Energy-Stratified Configurations (Dataset 2)
 
-### Mid Incident Energy
-Train Data Path:   
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_mid.hdf5  
-Test Data Path:  
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_mid.hdf5
+The following configuration files correspond to stratified incident energy splits for Dataset 2.
 
-### Low Incident Energy
-Train Data Path:  
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_low.hdf5  
-Test Data Path:  
-/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_low.hdf5
+| Energy Bin | Train Data | Test Data | Config File |
+|------------|------------|-----------|-------------|
+| **High**   | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_high.hdf5` | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_high.hdf5` | `configs/d2_shape_Baseline_high.yaml` |
+| **Mid**    | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_mid.hdf5`  | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_mid.hdf5`  | `configs/d2_shape_Baseline_mid.yaml`  |
+| **Low**    | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_low.hdf5`  | `/project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_low.hdf5`  | `configs/d2_shape_Baseline_low.yaml`  |
 
+Each configuration file is tuned to the corresponding incident energy range and should be used only with its matching stratified dataset.
+
+**Important:**  
+For each configuration file, update **lines 6, 11, and 23** to reflect the correct paths to:
+- the XML file  
+- the energy model  
+- the XML file
+
+These paths are user-dependent and must be adapted before execution.
