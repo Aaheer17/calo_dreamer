@@ -79,4 +79,19 @@ To run the sampling and the evaluation of a trained model.
 ```
 python3 src/main.py --use_cuda --plot --model_dir path/to/model --epoch model_name
 ```
+## Incident Energy Splits
+
+For convenience, we provide predefined paths for different incident energy ranges used in our experiments. These splits allow evaluation of model performance across low, mid, and high energy regimes.
+
+### High Incident Energy
+Train Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_high.hdf5  
+Test Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_high.hdf5
+
+### Mid Incident Energy
+Train Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_mid.hdf5  
+Test Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_mid.hdf5
+
+### Low Incident Energy
+Train Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_train_low.hdf5  
+Test Data Path: /project/biocomplexity/Calorimeter/stratified_by_energy_groups_no_split/dataset_2_test_low.hdf5
 
