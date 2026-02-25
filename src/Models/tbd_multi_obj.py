@@ -10,7 +10,7 @@ from torchdiffeq import odeint
 from torchsde import sdeint
 import torch.nn.functional as F
 
-class TBD(GenerativeModel):
+class TBD_MULTI(GenerativeModel):
     
     """
      Class for Trajectory-Based Diffusion
