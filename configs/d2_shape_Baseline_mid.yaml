@@ -64,6 +64,8 @@ bach_size_sample: 1000
 n_samples: 33187
 solver_kwargs: {method: rk4, options: {step_size: 0.02}}
 
+
+model: TBD_MULTI
 # Network
 network: ViT
 condition_dim: 46
