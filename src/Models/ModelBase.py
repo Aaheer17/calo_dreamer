@@ -6,9 +6,9 @@ import os, time
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from matplotlib.backends.backend_pdf import PdfPages
-import os
-import sys
 
+import sys
+import csv
 # Other functions of project
 from Util.util import *
 from datasets import *
@@ -145,8 +145,59 @@ class GenerativeModel(nn.Module):
             print(f"train_model: Logging to log_dir {log_dir}")
         else:
             print("train_model: log set to False. No logs will be written")
+        # ── CSV scalar logger ─────────────────────────────────────────────
 
+        self.csv_log_path = os.path.join(self.doc.basedir, 'training_scalars.csv')
+        self._scalar_log  = []   # list of dicts, one per epoch — held in memory
+    def _accumulate_scalars(self, scalars_list):
+        """
+        Average a list of per-batch scalar dicts into one per-epoch dict.
+        Handles missing keys gracefully — if a key only appears in some
+        batches (e.g. after adding a new loss mid-run) it is averaged over
+        only the batches where it was present.
+        """
+        if not scalars_list:
+            return {}
+        
+        from collections import defaultdict
+        sums   = defaultdict(float)
+        counts = defaultdict(int)
+        
+        for d in scalars_list:
+            for k, v in d.items():
+                sums[k]   += float(v)
+                counts[k] += 1
+        
+        return {k: sums[k] / counts[k] for k in sums}
+
+    def _flush_scalars_to_csv(self, epoch_scalars):
+        """
+        Append one epoch row to the CSV. 
+        If new keys appear that weren't in previous rows, the CSV is 
+        rewritten with the expanded header — so adding loss types later
+        never breaks the file.
+        """
+  
+    
+        epoch_scalars['epoch'] = self.epoch   # always stamp the epoch
+    
+        self._scalar_log.append(epoch_scalars)
+    
+        # collect union of all keys ever seen, in stable insertion order
+        all_keys = list(dict.fromkeys(
+            k for row in self._scalar_log for k in row
+        ))
+    
+        # rewrite entire CSV — safe because rows are held in memory
+        with open(self.csv_log_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=all_keys, extrasaction='ignore')
+            writer.writeheader()
+            for row in self._scalar_log:
+                # fill missing keys with empty string for old rows
+                writer.writerow({k: row.get(k, '') for k in all_keys})
+                
     def set_optimizer(self, steps_per_epoch=1, params=None):
+        
         """ Initialize optimizer and learning rate scheduling """
         if params is None:
             params = self.params
@@ -169,6 +220,11 @@ class GenerativeModel(nn.Module):
         if past_epochs != 0:
             self.load(epoch=past_epochs)
             self.scheduler = set_scheduler(self.optimizer, self.params, self.n_trainbatches, last_epoch=self.params.get("total_epochs", -1)*self.n_trainbatches)
+                # restore CSV history into memory so rewrite doesn't truncate it
+            if os.path.exists(self.csv_log_path):
+                
+                with open(self.csv_log_path, 'r') as f:
+                    self._scalar_log = list(csv.DictReader(f))
         print(f"train_model: Model has been trained for {past_epochs} epochs before.")
         print(f"train_model: Beginning training. n_epochs set to {n_epochs}")
         t_0 = time.time()
@@ -198,7 +254,7 @@ class GenerativeModel(nn.Module):
                         samples, c = self.reconstruct_n()
                     else:
                         samples, c = self.sample_n()
-                    self.plot_samples(samples=samples, conditions=c, name=self.epoch, energy=self.single_energy, mode=self.eval_mode)
+                    self.plot_samples(samples=samples, conditions=c, name=self.epoch, energy=self.single_energy)
 
             # save model periodically, useful when trying to understand how weights are learned over iterations
             if get(self.params,"save_periodically",False):
@@ -232,15 +288,20 @@ class GenerativeModel(nn.Module):
     def train_one_epoch(self):
         # create list to save train_loss
         train_losses = np.array([])
-
+        batch_scalars = []
         # iterate batch wise over input
         for batch_id, x in enumerate(self.train_loader):
 
             self.optimizer.zero_grad(set_to_none=True)
 
             # calculate batch loss
-            loss = self.batch_loss(x)
+            result = self.batch_loss(x)
 
+            # ── backwards-compatible unpacking ────────────────────────────
+            if isinstance(result, tuple):
+                loss, aux_scalars, _ = result
+            else:
+                loss, aux_scalars = result, {}
             if np.isfinite(loss.item()): # and (abs(loss.item() - loss_m) / loss_s < 5 or len(self.train_losses_epoch) == 0):
                 loss.backward()
 
@@ -252,7 +313,8 @@ class GenerativeModel(nn.Module):
                 train_losses = np.append(train_losses, loss.item())
                 # if self.log:
                 #     self.logger.add_scalar("train_losses", train_losses[-1], self.epoch*self.n_trainbatches + batch_id)
-
+                if aux_scalars:
+                    batch_scalars.append(aux_scalars)
                 if self.use_scheduler:
                     self.scheduler.step()
                     # if self.log:
@@ -264,27 +326,59 @@ class GenerativeModel(nn.Module):
 
         self.train_losses_epoch = np.append(self.train_losses_epoch, train_losses.mean())
         self.train_losses = np.concatenate([self.train_losses, train_losses], axis=0)
+
+        epoch_scalars = self._accumulate_scalars(batch_scalars)
+        epoch_scalars['total_loss'] = float(train_losses.mean())
+        epoch_scalars['split']      = 'train'
+        self._flush_scalars_to_csv(epoch_scalars)
         if self.log:
             self.logger.add_scalar("train_losses_epoch", self.train_losses_epoch[-1], self.epoch)
             if self.use_scheduler:
                 self.logger.add_scalar("learning_rate_epoch", self.scheduler.get_last_lr()[0],
                                        self.epoch)
 
+    # @torch.inference_mode()
+    # def validate_one_epoch(self):
+        
+    #     val_losses = np.array([])
+    #     # iterate batch wise over input
+    #     for batch_id, x in enumerate(self.val_loader):
+
+    #         # calculate batch loss
+    #         loss = self.batch_loss(x)
+    #         val_losses = np.append(val_losses, loss.item())
+    #         # if self.log:
+    #         #     self.logger.add_scalar("val_losses", val_losses[-1], self.epoch*self.n_trainbatches + batch_id)
+
+    #     self.val_losses_epoch = np.append(self.val_losses_epoch, val_losses.mean())
+    #     self.val_losses = np.concatenate([self.val_losses, val_losses], axis=0)
+    #     if self.log:
+    #         self.logger.add_scalar("val_losses_epoch", self.val_losses_epoch[-1], self.epoch)
     @torch.inference_mode()
     def validate_one_epoch(self):
-        
-        val_losses = np.array([])
-        # iterate batch wise over input
+        val_losses    = np.array([])
+        batch_scalars = []
+    
         for batch_id, x in enumerate(self.val_loader):
-
-            # calculate batch loss
-            loss = self.batch_loss(x)
+            result = self.batch_loss(x)
+    
+            if isinstance(result, tuple):
+                loss, aux_scalars,_ = result
+            else:
+                loss, aux_scalars = result, {}
+    
             val_losses = np.append(val_losses, loss.item())
-            # if self.log:
-            #     self.logger.add_scalar("val_losses", val_losses[-1], self.epoch*self.n_trainbatches + batch_id)
-
+            if aux_scalars:
+                batch_scalars.append(aux_scalars)
+    
         self.val_losses_epoch = np.append(self.val_losses_epoch, val_losses.mean())
-        self.val_losses = np.concatenate([self.val_losses, val_losses], axis=0)
+        self.val_losses       = np.concatenate([self.val_losses, val_losses], axis=0)
+    
+        epoch_scalars = self._accumulate_scalars(batch_scalars)
+        epoch_scalars['total_loss'] = float(val_losses.mean())
+        epoch_scalars['split']      = 'val'
+        self._flush_scalars_to_csv(epoch_scalars)
+    
         if self.log:
             self.logger.add_scalar("val_losses_epoch", self.val_losses_epoch[-1], self.epoch)
 
@@ -525,9 +619,12 @@ class GenerativeModel(nn.Module):
         # choose model
         if model_class == 'TBD':
             Model = self.__class__
-        if model_class == 'TransfusionAR':
+        elif model_class == 'TransfusionAR':
             from Models import TransfusionAR
             Model = TransfusionAR
+        elif model_class == 'TBD_MULTI':
+            from Models import TBD_MULTI
+            Model = TBD_MULTI
         elif model_class == 'AE':
             from Models import AE
             Model = AE
