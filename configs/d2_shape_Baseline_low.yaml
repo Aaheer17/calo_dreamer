@@ -68,7 +68,7 @@ model: TBD_MULTI
 network: ViT
 condition_dim: 46
 patch_shape: [3, 16, 1]
-hidden_dim: 480
+hidden_dim: 240
 depth: 6
 num_heads: 6
 mlp_ratio: 4.0
